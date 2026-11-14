@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EasyMusic - Votre musique, vos émotions</title>
+<meta name="description" content="Créez facilement une chanson personnalisée grâce à l'intelligence artificielle.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#090b12;color:white;line-height:1.6}
+header{padding:22px 7%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #252735}
+.logo{font-size:25px;font-weight:bold;color:#fff}
+.logo span{color:#a78bfa}
+nav a{color:#ddd;text-decoration:none;margin-left:22px;font-size:14px}
+.hero{text-align:center;padding:85px 20px 65px;background:radial-gradient(ellipse at top,#35205c 0%,#151226 45%,#090b12 85%)}
+.badge{display:inline-block;border:1px solid #7856c9;padding:7px 16px;border-radius:30px;color:#d3baff;font-size:13px;margin-bottom:25px}
+h1{font-size:clamp(38px,7vw,65px);line-height:1.12;max-width:850px;margin:auto}
+h1 span{color:#b69aff}
+.hero p{color:#c2bfd0;max-width:590px;margin:22px auto;font-size:17px}
+.btn{display:inline-block;background:#9567f5;color:white;padding:14px 27px;border-radius:10px;text-decoration:none;font-weight:bold;border:0;cursor:pointer;font-size:15px}
+section{padding:65px 7%}
+.section-title{text-align:center;font-size:32px;margin-bottom:12px}
+.subtitle{text-align:center;color:#aaa;margin-bottom:35px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px}
+.card{background:#151724;border:1px solid #292c3d;padding:25px;border-radius:15px}
+.card h3{margin-bottom:10px}
+.card p{color:#aaa;font-size:14px}
+.icon{font-size:30px;margin-bottom:12px}
+.creator{max-width:700px;margin:auto;background:#151724;border:1px solid #343044;padding:28px;border-radius:18px}
+label{display:block;margin:17px 0 7px;font-weight:bold}
+input,select,textarea{width:100%;padding:14px;border-radius:9px;border:1px solid #38394b;background:#0d101b;color:white;font-size:15px}
+textarea{min-height:100px;resize:vertical}
+.creator button{width:100%;margin-top:22px}
+.notice{text-align:center;color:#aaa;font-size:12px;margin-top:15px}
+.prices{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px;max-width:850px;margin:auto}
+.price{background:#151724;border:1px solid #39344f;border-radius:15px;padding:25px;text-align:center}
+.price strong{font-size:32px;display:block;margin:12px 0;color:#b69aff}
+.price p{color:#aaa}
+.price .btn{margin-top:18px}
+footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #252735;font-size:13px}
+@media(max-width:600px){nav a{margin-left:10px;font-size:12px}.hero{padding-top:65px}section{padding:50px 6%}}
+</style>
+</head>
+<body>
+
+<header>
+<div class="logo">Easy<span>Music</span> 🎵</div>
+<nav>
+<a href="#creation">Créer</a>
+<a href="#tarifs">Tarifs</a>
+</nav>
+</header>
+
+<div class="hero">
+<div class="badge">✨ LA MUSIQUE À PORTÉE DE TOUS</div>
+<h1>Transformez vos émotions en <span>chansons.</span></h1>
+<p>Un anniversaire, un mariage, une déclaration d'amour ou une surprise ? Créez votre chanson personnalisée grâce à l'intelligence artificielle.</p>
+<a href="#creation" class="btn">Créer ma chanson →</a>
+</div>
+
+<section>
+<h2 class="section-title">Votre histoire mérite une chanson</h2>
+<p class="subtitle">Une expérience musicale simple, rapide et accessible.</p>
+<div class="cards">
+<div class="card">
+<div class="icon">❤️</div>
+<h3>Une chanson unique</h3>
+<p>Personnalisez votre chanson avec vos noms, vos souvenirs et vos émotions.</p>
+</div>
+<div class="card">
+<div class="icon">🎼</div>
+<h3>Vos styles préférés</h3>
+<p>Afrobeat, Gospel, R&B, Amapiano, Makossa, Zouk et bien plus.</p>
+</div>
+<div class="card">
+<div class="icon">⚡</div>
+<h3>Simple et rapide</h3>
+<p>Commandez votre chanson et récupérez votre création en MP3.</p>
+</div>
+</div>
+</section>
+
+<section id="creation">
+<h2 class="section-title">Créez votre chanson</h2>
+<p class="subtitle">Racontez-nous votre histoire.</p>
+<div class="creator">
+<form id="songForm">
+<label>Pour qui est cette chanson ?</label>
+<input type="text" placeholder="Ex : Marie, mon épouse" required>
+
+<label>Quelle est l'occasion ?</label>
+<select required>
+<option value="">Choisir une occasion</option>
+<option>Anniversaire</option>
+<option>Mariage</option>
+<option>Déclaration d'amour</option>
+<option>Remerciement</option>
+<option>Hommage</option>
+<option>Autre</option>
+</select>
+
+<label>Quel style musical souhaitez-vous ?</label>
+<select required>
+<option value="">Choisir un style</option>
+<option>Afrobeat</option>
+<option>Afropop</option>
+<option>Gospel</option>
+<option>Amapiano</option>
+<option>Makossa</option>
+<option>R&B</option>
+<option>Zouk</option>
+<option>Rap / Afrotrap</option>
+</select>
+
+<label>Racontez votre histoire</label>
+<textarea placeholder="Décrivez les personnes, les souvenirs et les émotions à intégrer dans la chanson..." required></textarea>
+
+<button class="btn" type="submit">Continuer ma création →</button>
+</form>
+<p class="notice">Votre chanson sera générée après la mise en place du système de commande et de paiement.</p>
+</div>
+</section>
+
+<section id="tarifs">
+<h2 class="section-title">Des prix accessibles à tous</h2>
+<p class="subtitle">Choisissez votre formule.</p>
+<div class="prices">
+<div class="price">
+<h3>Découverte</h3>
+<strong>1 000 F</strong>
+<p>1 chanson personnalisée</p>
+<a href="#creation" class="btn">Choisir</a>
+</div>
+<div class="price">
+<h3>Populaire ⭐</h3>
+<strong>2 500 F</strong>
+<p>3 chansons personnalisées</p>
+<a href="#creation" class="btn">Choisir</a>
+</div>
+<div class="price">
+<h3>Famille</h3>
+<strong>4 000 F</strong>
+<p>5 chansons personnalisées</p>
+<a href="#creation" class="btn">Choisir</a>
+</div>
+</div>
+</section>
+
+<footer>
+<p>© 2026 EasyMusic. Tous droits réservés.</p>
+<p>Votre histoire, votre musique. ❤️</p>
+</footer>
+
+<script>
+document.getElementById('songForm').addEventListener('submit',function(e){
+e.preventDefault();
+alert("Merci ! La plateforme de création musicale sera bientôt disponible.");
+});
+</script>
+
+</body>
+</html>
