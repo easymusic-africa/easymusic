@@ -154,17 +154,64 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 const form = document.getElementById('songForm');
 
 if (form) {
-  form.addEventListener('submit', function(e) {
+  form.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const story = document.querySelector('textarea')?.value.trim();
+    const inputs = form.querySelectorAll('input');
+    const selects = form.querySelectorAll('select');
+    const story = form.querySelector('textarea').value.trim();
 
-    if (!story) {
-      alert("Veuillez raconter votre histoire.");
+    const recipient = inputs[0].value.trim();
+    const occasion = selects[0].value;
+    const style = selects[1].value;
+
+    if (!recipient || !occasion || !style || !story) {
+      alert("Veuillez remplir tous les champs.");
       return;
     }
 
-    alert("Votre histoire a bien été enregistrée ! EasyMusic prépare la suite.");
+    const button = form.querySelector('button[type="submit"]');
+    const originalText = button.textContent;
+
+    button.disabled = true;
+    button.textContent = "Préparation de votre chanson...";
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          recipient,
+          occasion,
+          story,
+          style
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erreur lors de la génération.");
+      }
+
+      alert(
+        "Votre demande a été envoyée avec succès !\n\n" +
+        "Titre : " + (data.title || "Votre chanson") +
+        "\n\nVotre chanson est en cours de préparation."
+      );
+
+      console.log("Réponse API EasyMusic :", data);
+
+    } catch (error) {
+      alert("Erreur : " + error.message);
+      console.error(error);
+
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
   });
 }
 </script>
