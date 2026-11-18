@@ -150,13 +150,25 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 <p>© 2026 EasyMusic. Tous droits réservés.</p>
 <p>Votre histoire, votre musique. ❤️</p>
 </footer>
-
 <script>
-document.getElementById('songForm').addEventListener('submit',function(e){
-e.preventDefault();
-alert("Merci ! La plateforme de création musicale sera bientôt disponible.");
-});
+const form = document.getElementById('songForm');
+
+if (form) {
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const story = document.querySelector('textarea')?.value.trim();
+
+    if (!story) {
+      alert("Veuillez raconter votre histoire.");
+      return;
+    }
+
+    alert("Votre histoire a bien été enregistrée ! EasyMusic prépare la suite.");
+  });
+}
 </script>
+
 
 </body>
 </html>
