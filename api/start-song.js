@@ -2,10 +2,62 @@
 // 1) génère les paroles, 2) lance la génération de la chanson chez Mureka,
 // 3) renvoie tout de suite un identifiant de suivi (taskId).
 // La chanson n'est PAS prête à ce moment : le navigateur interroge ensuite /api/song-status.
+// Fichier autonome : aucun import local.
 
-import { murekaFetch } from "../lib/mureka.js";
-import { checkAccess } from "../lib/access.js";
+import crypto from "node:crypto";
 
+const MUREKA_URL = "https://api.mureka.ai";
+
+// ---------- Accès temporaire (remplacé plus tard par la vérification du paiement) ----------
+function sha256(text) {
+  return crypto.createHash("sha256").update(String(text)).digest();
+}
+
+function checkAccess(req) {
+  const expected = process.env.TEST_ACCESS_CODE;
+  if (!expected) return "disabled";
+  const provided = req.headers["x-access-code"];
+  if (typeof provided !== "string" || provided.length === 0) return "denied";
+  return crypto.timingSafeEqual(sha256(provided), sha256(expected)) ? "ok" : "denied";
+}
+
+// ---------- Appel à l'API Mureka ----------
+async function murekaFetch(path, { method = "GET", body, timeoutMs = 45000 } = {}) {
+  const apiKey = process.env.MUREKA_API_KEY;
+  if (!apiKey) {
+    const error = new Error("MUREKA_API_KEY manquante");
+    error.code = "NO_KEY";
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(MUREKA_URL + path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = null;
+    }
+
+    return { ok: response.ok, status: response.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------- Réglages ----------
 const LIMITS = { recipient: 80, occasion: 80, story: 1500, style: 60 };
 const MAX_LYRICS = 3000;
 
