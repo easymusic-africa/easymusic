@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>EasyMusic – Test</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Arial, sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #1a1a1a; }
+    main { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 1.3rem; }
+    label { display: block; margin-top: 14px; font-weight: 600; font-size: .95rem; }
+    input, select, textarea, button { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 12px; margin-top: 6px; border: 1px solid #ccc; border-radius: 10px; background: #fff; }
+    textarea { min-height: 130px; }
+    button { background: #1a1a1a; color: #fff; border: 0; margin-top: 20px; font-weight: 600; }
+    button:disabled { opacity: .5; }
+    #status { margin-top: 18px; font-weight: 600; }
+    #error { color: #b00020; margin-top: 12px; }
+    #lyrics { white-space: pre-wrap; background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; display: none; }
+    audio { width: 100%; margin-top: 14px; display: none; }
+    a#download { display: none; margin-top: 10px; }
+    .note { font-size: .85rem; color: #666; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>EasyMusic – page de test</h1>
+  <p class="note">Page de test privée. Elle sera remplacée par le vrai formulaire avec paiement.</p>
+
+  <form id="form">
+    <label for="code">Code d'accès</label>
+    <input id="code" type="password" autocomplete="off" required>
+
+    <label for="recipient">Pour qui est la chanson ?</label>
+    <input id="recipient" maxlength="80" required>
+
+    <label for="occasion">Occasion</label>
+    <input id="occasion" maxlength="80" placeholder="Anniversaire, mariage, remerciement…" required>
+
+    <label for="story">Votre histoire</label>
+    <textarea id="story" maxlength="1500" required></textarea>
+
+    <label for="style">Style musical</label>
+    <select id="style">
+      <option>Afrobeats</option>
+      <option>Makossa</option>
+      <option>Coupé-décalé</option>
+      <option>Rumba congolaise</option>
+      <option>Bikutsi</option>
+      <option>Amapiano</option>
+      <option>Gospel</option>
+      <option>Zouk</option>
+      <option>R&B</option>
+      <option>Pop</option>
+    </select>
+
+    <label for="gender">Voix</label>
+    <select id="gender">
+      <option value="">Au choix</option>
+      <option value="female">Féminine</option>
+      <option value="male">Masculine</option>
+    </select>
+
+    <button id="go" type="submit">Créer ma chanson</button>
+  </form>
+
+  <div id="status"></div>
+  <div id="error"></div>
+  <div id="lyrics"></div>
+  <audio id="player" controls></audio>
+  <a id="download" target="_blank" rel="noopener">Télécharger le MP3</a>
+</main>
+
+<script>
+  const form = document.getElementById("form");
+  const go = document.getElementById("go");
+  const statusEl = document.getElementById("status");
+  const errorEl = document.getElementById("error");
+  const lyricsEl = document.getElementById("lyrics");
+  const player = document.getElementById("player");
+  const download = document.getElementById("download");
+
+  const POLL_EVERY_MS = 6000;
+  const MAX_WAIT_MS = 8 * 60 * 1000;
+
+  function showError(message) {
+    errorEl.textContent = message;
+    statusEl.textContent = "";
+    go.disabled = false;
+  }
+
+  function wait(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    errorEl.textContent = "";
+    lyricsEl.style.display = "none";
+    player.style.display = "none";
+    download.style.display = "none";
+    go.disabled = true;
+    statusEl.textContent = "Écriture des paroles… (environ 30 secondes)";
+
+    const code = document.getElementById("code").value;
+
+    try {
+      const startResponse = await fetch("/api/start-song", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-access-code": code },
+        body: JSON.stringify({
+          recipient: document.getElementById("recipient").value,
+          occasion: document.getElementById("occasion").value,
+          story: document.getElementById("story").value,
+          style: document.getElementById("style").value,
+          gender: document.getElementById("gender").value
+        })
+      });
+
+      const started = await startResponse.json();
+
+      if (!startResponse.ok) {
+        showError(started.error || "Erreur au lancement.");
+        return;
+      }
+
+      lyricsEl.textContent = started.title + "\n\n" + started.lyrics;
+      lyricsEl.style.display = "block";
+      statusEl.textContent = "Composition de la musique… (1 à 3 minutes)";
+
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        await wait(POLL_EVERY_MS);
+
+        const statusResponse = await fetch("/api/song-status?id=" + encodeURIComponent(started.taskId), {
+          headers: { "x-access-code": code }
+        });
+        const state = await statusResponse.json();
+
+        if (!statusResponse.ok) {
+          showError(state.error || "Erreur de suivi.");
+          return;
+        }
+
+        if (state.status === "failed") {
+          showError("La génération a échoué. Réessayez.");
+          return;
+        }
+
+        if (state.status === "ready") {
+          player.src = state.audioUrl;
+          player.style.display = "block";
+          download.href = state.audioUrl;
+          download.style.display = "inline-block";
+          statusEl.textContent = "Votre chanson est prête !";
+          go.disabled = false;
+          return;
+        }
+      }
+
+      showError("Trop long. Réessayez dans quelques minutes.");
+    } catch (e) {
+      showError("Problème de connexion. Réessayez.");
+    }
+  });
+</script>
+</body>
+</html>
