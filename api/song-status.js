@@ -1,13 +1,13 @@
 // GET /api/song-status?id=XXXX
 // Demande à Mureka où en est la chanson et renvoie : pending, ready ou failed.
 
-const { murekaFetch } = require("../lib/mureka");
-const { checkAccess } = require("../lib/access");
+import { murekaFetch } from "../lib/mureka.js";
+import { checkAccess } from "../lib/access.js";
 
 const DONE = ["succeeded", "success", "completed"];
 const FAILED = ["failed", "timeouted", "timeout", "cancelled", "canceled"];
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Méthode non autorisée" });
   }
@@ -62,4 +62,4 @@ module.exports = async (req, res) => {
     console.error("song-status error", error && error.message);
     return res.status(500).json({ error: "Une erreur interne est survenue." });
   }
-};
+}
