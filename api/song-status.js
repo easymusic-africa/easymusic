@@ -1,11 +1,57 @@
 // GET /api/song-status?id=XXXX
 // Demande à Mureka où en est la chanson et renvoie : pending, ready ou failed.
+// Fichier autonome : aucun import local.
 
-import { murekaFetch } from "../lib/mureka.js";
-import { checkAccess } from "../lib/access.js";
+import crypto from "node:crypto";
 
+const MUREKA_URL = "https://api.mureka.ai";
 const DONE = ["succeeded", "success", "completed"];
 const FAILED = ["failed", "timeouted", "timeout", "cancelled", "canceled"];
+
+// ---------- Accès temporaire (remplacé plus tard par la vérification du paiement) ----------
+function sha256(text) {
+  return crypto.createHash("sha256").update(String(text)).digest();
+}
+
+function checkAccess(req) {
+  const expected = process.env.TEST_ACCESS_CODE;
+  if (!expected) return "disabled";
+  const provided = req.headers["x-access-code"];
+  if (typeof provided !== "string" || provided.length === 0) return "denied";
+  return crypto.timingSafeEqual(sha256(provided), sha256(expected)) ? "ok" : "denied";
+}
+
+// ---------- Appel à l'API Mureka ----------
+async function murekaFetch(path, { timeoutMs = 25000 } = {}) {
+  const apiKey = process.env.MUREKA_API_KEY;
+  if (!apiKey) {
+    const error = new Error("MUREKA_API_KEY manquante");
+    error.code = "NO_KEY";
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(MUREKA_URL + path, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = null;
+    }
+
+    return { ok: response.ok, status: response.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
