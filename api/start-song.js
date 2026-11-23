@@ -3,8 +3,8 @@
 // 3) renvoie tout de suite un identifiant de suivi (taskId).
 // La chanson n'est PAS prête à ce moment : le navigateur interroge ensuite /api/song-status.
 
-const { murekaFetch } = require("../lib/mureka");
-const { checkAccess } = require("../lib/access");
+import { murekaFetch } from "../lib/mureka.js";
+import { checkAccess } from "../lib/access.js";
 
 const LIMITS = { recipient: 80, occasion: 80, story: 1500, style: 60 };
 const MAX_LYRICS = 3000;
@@ -27,7 +27,7 @@ function cleanText(value, max) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Méthode non autorisée" });
   }
@@ -125,4 +125,4 @@ La chanson doit être personnalisée, cohérente, touchante et facile à chanter
       : "Une erreur interne est survenue.";
     return res.status(500).json({ error: message });
   }
-};
+}
