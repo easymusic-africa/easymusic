@@ -1,86 +1,112 @@
-import { createClient } from '@supabase/supabase-js';
+// POST /api/webhook
+// Notch Pay appelle cette adresse quand un paiement change d'état.
+// On ne fait JAMAIS confiance au message : on redemande l'état réel à Notch Pay.
+// Cette fonction marque seulement la commande « payée » ; la chanson est lancée par /api/order.
+
+import { createClient } from "@supabase/supabase-js";
+
+const PRICE = 1000;
+const NOTCH_URL = "https://api.notchpay.co";
+const PAID = ["complete", "completed", "success", "successful"];
+const PAY_FAILED = ["failed", "canceled", "cancelled", "expired"];
+const SAFE_REF = /^[A-Za-z0-9._-]{1,80}$/;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+async function verifyWithNotch(order) {
+  const ids = [order.notch_reference, order.reference].filter(Boolean);
+
+  for (const id of ids) {
+    const response = await fetch(`${NOTCH_URL}/payments/${encodeURIComponent(id)}`, {
+      headers: { Authorization: process.env.NOTCHPAY_PUBLIC_KEY }
+    });
+    const json = await response.json().catch(() => null);
+    const tx = json && (json.transaction || json.data);
+
+    if (response.ok && tx) {
+      return {
+        status: String(tx.status || "").toLowerCase(),
+        amount: Number(tx.amount),
+        currency: String(tx.currency || "")
+      };
+    }
+  }
+  return null;
+}
+
+async function findOrder(data) {
+  const candidates = [data.merchant_reference, data.reference, data.trxref]
+    .filter((v) => typeof v === "string" && SAFE_REF.test(v));
+
+  for (const ref of candidates) {
+    for (const column of ["reference", "notch_reference"]) {
+      const { data: order } = await supabase
+        .from("orders")
+        .select("*")
+        .eq(column, ref)
+        .maybeSingle();
+      if (order) return order;
+    }
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Méthode non autorisée" });
   }
 
   try {
     const payload = req.body || {};
     const data = payload.data || payload;
-    const reference = data.reference;
-    const status = (data.status || '').toLowerCase();
 
-    if (!reference) {
-      return res.status(400).json({ error: 'Missing reference' });
+    const order = await findOrder(data);
+
+    // Commande inconnue : on répond 200 pour que Notch Pay n'insiste pas pendant 36 h.
+    if (!order) {
+      return res.status(200).json({ received: true });
     }
 
-    const verifyRes = await fetch(
-      `https://api.notchpay.co/payments/${encodeURIComponent(reference)}`,
-      {
-        headers: {
-          Authorization: process.env.NOTCHPAY_PUBLIC_KEY,
-        },
-      }
-    );
-
-    const verifyJson = await verifyRes.json();
-    const verifiedStatus = (
-      verifyJson?.transaction?.status ||
-      verifyJson?.data?.status ||
-      status
-    ).toLowerCase();
-
-    const { data: txData, error: txError } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('transaction_id', reference)
-      .single();
-
-    if (txError || !txData) {
-      return res.status(404).json({ error: 'Transaction not found' });
+    if (order.status !== "PENDING_PAYMENT") {
+      return res.status(200).json({ received: true });
     }
 
-    if (verifiedStatus === 'complete' || verifiedStatus === 'completed') {
-      if (txData.status !== 'COMPLETED') {
-        await supabase
-          .from('transactions')
-          .update({ status: 'COMPLETED' })
-          .eq('transaction_id', reference);
+    const verified = await verifyWithNotch(order);
+    if (!verified) {
+      // Impossible de vérifier maintenant : Notch Pay réessaiera.
+      return res.status(503).json({ error: "Vérification indisponible" });
+    }
 
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('credits')
-          .eq('id', txData.user_id)
-          .single();
-
-        const currentCredits = profileData?.credits || 0;
-        const addedCredits = txData.credits || 1;
-
-        await supabase
-          .from('profiles')
-          .update({ credits: currentCredits + addedCredits })
-          .eq('id', txData.user_id);
+    if (PAID.includes(verified.status)) {
+      if (Number.isFinite(verified.amount) && verified.amount < PRICE) {
+        console.error("webhook: montant insuffisant", order.reference, verified.amount);
+        return res.status(200).json({ received: true });
       }
+
+      const now = new Date().toISOString();
+      await supabase
+        .from("orders")
+        .update({ status: "PAID", paid_at: now, updated_at: now })
+        .eq("id", order.id)
+        .eq("status", "PENDING_PAYMENT");
 
       return res.status(200).json({ success: true });
     }
 
-    if (verifiedStatus === 'failed' || verifiedStatus === 'canceled' || verifiedStatus === 'cancelled') {
+    if (PAY_FAILED.includes(verified.status)) {
       await supabase
-        .from('transactions')
-        .update({ status: 'FAILED' })
-        .eq('transaction_id', reference);
+        .from("orders")
+        .update({ status: "PAYMENT_FAILED", updated_at: new Date().toISOString() })
+        .eq("id", order.id)
+        .eq("status", "PENDING_PAYMENT");
     }
 
     return res.status(200).json({ received: true });
   } catch (error) {
-    console.error('Erreur webhook Notch Pay:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("webhook error", error && error.message);
+    return res.status(500).json({ error: "Erreur interne" });
   }
 }
