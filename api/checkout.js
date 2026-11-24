@@ -35,10 +35,11 @@ export default async function handler(req, res) {
     const occasion = clean(body.occasion, 80);
     const style = clean(body.style, 60);
 
-    if (!recipient || !story || !email || !occasion || !style) {
-      return res.status(400).json({ error: "Veuillez remplir tous les champs." });
+    if (!recipient || !story || !occasion || !style) {
+      return res.status(400).json({ error: "Veuillez remplir tous les champs obligatoires." });
     }
-    if (!EMAIL_RE.test(email)) {
+    // L'email est facultatif : sans email, Notch Pay reçoit une adresse générique du site.
+    if (email && !EMAIL_RE.test(email)) {
       return res.status(400).json({ error: "Adresse email invalide." });
     }
     if (!OCCASIONS.includes(occasion) || !STYLES.includes(style)) {
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
       reference,
       amount: PRICE,
       currency: CURRENCY,
-      email,
+      email: email || null,
       recipient,
       occasion,
       style,
@@ -75,7 +76,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         amount: PRICE,
         currency: CURRENCY,
-        email,
+        email: email || "client@easymusic.africa",
         reference,
         description: "Chanson personnalisée EasyMusic",
         callback: `${origin}/?order=${reference}`
