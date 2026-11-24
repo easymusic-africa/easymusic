@@ -53,6 +53,7 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 .review .btn[disabled]{opacity:.55;cursor:default}
 .review input{margin-top:6px}
 .result .btn.download{display:block;text-align:center;margin-top:14px}
+.result .btn.download[hidden]{display:none}
 .btn.soon{background:#2a2740;color:#a9a4c0;cursor:default}
 .order-link{font-size:12px;color:#aaa;word-break:break-all;text-align:center;margin-top:16px}
 @media(max-width:600px){nav a{margin-left:10px;font-size:12px}.hero{padding-top:65px}section{padding:50px 6%}}
@@ -132,9 +133,6 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 <label>Racontez votre histoire</label>
 <textarea placeholder="Décrivez les personnes, les souvenirs et les émotions à intégrer dans la chanson..." required></textarea>
 
-<label>Votre email</label>
-<input type="email" placeholder="Ex : marie@exemple.com" required>
-
 <button class="btn" type="submit">Payer 1 000 F et créer ma chanson →</button>
 </form>
 <div id="result" class="result" hidden>
@@ -153,7 +151,7 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 <a id="resultDownload" class="btn download" target="_blank" rel="noopener" hidden>Télécharger mon MP3</a>
 <p id="resultLink" class="order-link" hidden></p>
 </div>
-<p class="notice">Une chanson = 1 000 F. Paiement par Mobile Money via Notch Pay. Votre email sert uniquement au paiement.</p>
+<p class="notice">Une chanson = 1 000 F. Paiement par Mobile Money via Notch Pay.</p>
 </div>
 </section>
 
@@ -412,11 +410,11 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
     var story = form.querySelector('textarea').value.trim();
 
     var recipient = inputs[0].value.trim();
-    var email = inputs[1].value.trim();
+    var email = '';
     var occasion = selects[0].value;
     var style = selects[1].value;
 
-    if (!recipient || !email || !occasion || !style || !story) {
+    if (!recipient || !occasion || !style || !story) {
       alert("Veuillez remplir tous les champs.");
       return;
     }
