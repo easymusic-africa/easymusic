@@ -1,6 +1,5 @@
 {
   "functions": {
-    "api/start-song.js": { "maxDuration": 60 },
-    "api/song-status.js": { "maxDuration": 30 }
+    "api/*.js": { "maxDuration": 60 }
   }
 }
