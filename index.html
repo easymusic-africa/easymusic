@@ -45,7 +45,16 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 .result h3{margin:18px 0 10px;text-align:center}
 .lyrics{white-space:pre-wrap;background:#0d101b;border:1px solid #38394b;border-radius:12px;padding:16px;color:#e4e1ee;font-size:15px;max-height:340px;overflow:auto}
 .result audio{width:100%;margin-top:18px}
+.review[hidden]{display:none}
+.review textarea{min-height:300px;line-height:1.5;margin-top:6px}
+.review .hint{font-size:13px;color:#b7b2cc;margin:10px 0 4px}
+.review .btn{display:block;width:100%;text-align:center;margin-top:12px}
+.review .btn.alt{background:#2a2740;color:#e4e1ee}
+.review .btn[disabled]{opacity:.55;cursor:default}
+.review input{margin-top:6px}
 .result .btn.download{display:block;text-align:center;margin-top:14px}
+.btn.soon{background:#2a2740;color:#a9a4c0;cursor:default}
+.order-link{font-size:12px;color:#aaa;word-break:break-all;text-align:center;margin-top:16px}
 @media(max-width:600px){nav a{margin-left:10px;font-size:12px}.hero{padding-top:65px}section{padding:50px 6%}}
 </style>
 </head>
@@ -123,16 +132,28 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 <label>Racontez votre histoire</label>
 <textarea placeholder="Décrivez les personnes, les souvenirs et les émotions à intégrer dans la chanson..." required></textarea>
 
-<button class="btn" type="submit">Continuer ma création →</button>
+<label>Votre email</label>
+<input type="email" placeholder="Ex : marie@exemple.com" required>
+
+<button class="btn" type="submit">Payer 1 000 F et créer ma chanson →</button>
 </form>
 <div id="result" class="result" hidden>
 <p id="resultStatus" class="result-status"></p>
 <h3 id="resultTitle" hidden></h3>
 <div id="resultLyrics" class="lyrics" hidden></div>
+<div id="reviewBox" class="review" hidden>
+<p class="hint">Voici les paroles de votre chanson. Vous pouvez les modifier directement dans la zone ci-dessous. Gardez les titres entre crochets, comme [Refrain], pour que la musique suive la structure.</p>
+<textarea id="reviewLyrics" maxlength="3000"></textarea>
+<p class="hint">Pas tout à fait ça ? Dites ce que vous voulez changer, puis demandez une nouvelle version.</p>
+<input type="text" id="reviewFeedback" maxlength="300" placeholder="Ex : plus joyeux, mentionner notre village…">
+<button type="button" id="reviewRewrite" class="btn alt">Réécrire les paroles</button>
+<button type="button" id="reviewApprove" class="btn">Valider et créer ma chanson 🎵</button>
+</div>
 <audio id="resultPlayer" controls hidden></audio>
 <a id="resultDownload" class="btn download" target="_blank" rel="noopener" hidden>Télécharger mon MP3</a>
+<p id="resultLink" class="order-link" hidden></p>
 </div>
-<p class="notice">Mode test : la création est protégée par un code d'accès. Le paiement sera ajouté prochainement.</p>
+<p class="notice">Une chanson = 1 000 F. Paiement par Mobile Money via Notch Pay. Votre email sert uniquement au paiement.</p>
 </div>
 </section>
 
@@ -150,13 +171,13 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 <h3>Populaire ⭐</h3>
 <strong>2 500 F</strong>
 <p>3 chansons personnalisées</p>
-<a href="#creation" class="btn">Choisir</a>
+<span class="btn soon">Bientôt disponible</span>
 </div>
 <div class="price">
 <h3>Famille</h3>
 <strong>4 000 F</strong>
 <p>5 chansons personnalisées</p>
-<a href="#creation" class="btn">Choisir</a>
+<span class="btn soon">Bientôt disponible</span>
 </div>
 </div>
 </section>
@@ -176,25 +197,25 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
   var lyricsEl = document.getElementById('resultLyrics');
   var playerEl = document.getElementById('resultPlayer');
   var downloadEl = document.getElementById('resultDownload');
+  var linkEl = document.getElementById('resultLink');
+  var reviewBox = document.getElementById('reviewBox');
+  var reviewLyrics = document.getElementById('reviewLyrics');
+  var reviewFeedback = document.getElementById('reviewFeedback');
+  var reviewRewrite = document.getElementById('reviewRewrite');
+  var reviewApprove = document.getElementById('reviewApprove');
+  var currentRef = null;
+  var lastLyrics = null;
+  var busy = false;
 
-  var POLL_EVERY_MS = 6000;
-  var MAX_WAIT_MS = 8 * 60 * 1000;
+  var STORE_KEY = 'em_order';
+  var REF_RE = /^EM[a-f0-9]{32}$/;
+  var POLL_EVERY_MS = 5000;
+  var MAX_WAIT_MS = 20 * 60 * 1000;
+  var tracking = 0;
 
-  function getCode() {
-    var code = null;
-    try { code = sessionStorage.getItem('em_access'); } catch (e) {}
-    if (!code) {
-      code = window.prompt("Code d'accès (mode test) :");
-      if (code) {
-        try { sessionStorage.setItem('em_access', code); } catch (e) {}
-      }
-    }
-    return code;
-  }
-
-  function clearCode() {
-    try { sessionStorage.removeItem('em_access'); } catch (e) {}
-  }
+  function store(ref) { try { localStorage.setItem(STORE_KEY, ref); } catch (e) {} }
+  function unstore() { try { localStorage.removeItem(STORE_KEY); } catch (e) {} }
+  function stored() { try { return localStorage.getItem(STORE_KEY); } catch (e) { return null; } }
 
   function wait(ms) {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
@@ -213,9 +234,174 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
     resultBox.hidden = false;
     titleEl.hidden = true;
     lyricsEl.hidden = true;
+    reviewBox.hidden = true;
+    lastLyrics = null;
     playerEl.hidden = true;
     downloadEl.hidden = true;
+    linkEl.hidden = true;
     playerEl.removeAttribute('src');
+  }
+
+  function showLink(ref) {
+    linkEl.textContent = 'Gardez ce lien pour retrouver votre chanson : ' + location.origin + '/?order=' + ref;
+    linkEl.hidden = false;
+  }
+
+  function showReview(state) {
+    lyricsEl.hidden = true;
+    reviewBox.hidden = false;
+    if (state.lyrics && state.lyrics !== lastLyrics) {
+      reviewLyrics.value = state.lyrics;
+      lastLyrics = state.lyrics;
+    }
+    var left = typeof state.regensLeft === 'number' ? state.regensLeft : 0;
+    reviewRewrite.textContent = left > 0
+      ? 'Réécrire les paroles (' + left + ' restante' + (left > 1 ? 's' : '') + ')'
+      : 'Plus de nouvelle version : modifiez le texte à la main';
+    reviewRewrite.disabled = left <= 0;
+    reviewApprove.disabled = false;
+    reviewRewrite.hidden = false;
+  }
+
+  async function sendAction(payload, waitingText) {
+    if (busy || !currentRef) return;
+    busy = true;
+    reviewApprove.disabled = true;
+    reviewRewrite.disabled = true;
+    var myId = ++tracking;
+    setStatus(waitingText, false);
+
+    var data = {};
+    try {
+      var response = await fetch('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ ref: currentRef }, payload))
+      });
+      data = await readJson(response);
+      if (!response.ok && !data.state) throw new Error('http ' + response.status);
+    } catch (e) {
+      busy = false;
+      // La création a peut-être abouti malgré la coupure : on reprend le suivi.
+      track(currentRef);
+      return;
+    }
+    busy = false;
+
+    if (data.message) {
+      // Refus ou échec : on reste sur l'écran de relecture avec le message.
+      if (data.state === 'review') {
+        showReview(data);
+        setStatus(data.message, true);
+        return;
+      }
+    }
+    track(currentRef);
+  }
+
+  reviewRewrite.addEventListener('click', function () {
+    sendAction({ action: 'regenerate', feedback: reviewFeedback.value.trim() }, 'Réécriture des paroles…');
+    reviewFeedback.value = '';
+  });
+
+  reviewApprove.addEventListener('click', function () {
+    var text = reviewLyrics.value.trim();
+    if (text.length < 40) {
+      setStatus('Les paroles sont trop courtes.', true);
+      return;
+    }
+    if (!confirm('Valider ces paroles ? La chanson sera créée avec ce texte exact, et ne pourra plus être modifiée.')) return;
+    sendAction({ action: 'approve', lyrics: text }, 'Composition de votre chanson… (1 à 3 minutes, ne fermez pas la page)');
+  });
+
+  async function track(ref) {
+    var myId = ++tracking;
+    currentRef = ref;
+    resetResult();
+    showLink(ref);
+    setStatus('Vérification de votre commande…', false);
+    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    var startedAt = Date.now();
+
+    while (myId === tracking && Date.now() - startedAt < MAX_WAIT_MS) {
+      var state = null;
+
+      try {
+        var response = await fetch('/api/order?ref=' + encodeURIComponent(ref));
+        var data = await readJson(response);
+
+        if (response.status === 404) {
+          unstore();
+          linkEl.hidden = true;
+          setStatus('Commande introuvable.', true);
+          return;
+        }
+        if (!response.ok) throw new Error('http ' + response.status);
+        state = data;
+      } catch (e) {
+        if (myId !== tracking) return;
+        setStatus('Reconnexion en cours…', false);
+        await wait(POLL_EVERY_MS);
+        continue;
+      }
+
+      if (myId !== tracking) return;
+
+      if (state.title) {
+        titleEl.textContent = state.title;
+        titleEl.hidden = false;
+      }
+
+      if (state.state === 'review') {
+        showReview(state);
+        setStatus('Vos paroles sont prêtes ✍️ Relisez, modifiez si besoin, puis validez.', false);
+        return;
+      }
+
+      reviewBox.hidden = true;
+      if (state.lyrics && state.state !== 'rewriting') {
+        lyricsEl.textContent = state.lyrics;
+        lyricsEl.hidden = false;
+      }
+
+      if (state.state === 'ready') {
+        lyricsEl.hidden = false;
+        playerEl.src = state.audioUrl;
+        playerEl.hidden = false;
+        downloadEl.href = state.audioUrl;
+        downloadEl.hidden = false;
+        setStatus('Votre chanson est prête ! 🎉', false);
+        unstore();
+        return;
+      }
+      if (state.state === 'payment_failed') {
+        unstore();
+        linkEl.hidden = true;
+        setStatus("Le paiement n'a pas abouti. Vous pouvez réessayer ci-dessus.", true);
+        return;
+      }
+      if (state.state === 'failed') {
+        setStatus("Un problème est survenu avec votre chanson. Contactez-nous en indiquant votre lien de commande : votre paiement sera pris en charge.", true);
+        return;
+      }
+
+      if (state.state === 'awaiting_payment') {
+        setStatus("En attente de votre paiement… Si vous avez déjà payé, patientez quelques instants.", false);
+      } else if (state.state === 'queued') {
+        setStatus("Paiement reçu ✅ Préparation de vos paroles…", false);
+      } else if (state.state === 'writing' || state.state === 'rewriting') {
+        setStatus("Écriture des paroles… (quelques secondes)", false);
+      } else {
+        setStatus("Composition de votre chanson… (1 à 3 minutes, ne fermez pas la page)", false);
+      }
+
+      await wait(POLL_EVERY_MS);
+    }
+
+    if (myId === tracking) {
+      setStatus("Cela prend plus de temps que prévu. Revenez sur ce lien dans quelques minutes.", true);
+    }
   }
 
   form.addEventListener('submit', async function (e) {
@@ -226,160 +412,61 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
     var story = form.querySelector('textarea').value.trim();
 
     var recipient = inputs[0].value.trim();
+    var email = inputs[1].value.trim();
     var occasion = selects[0].value;
     var style = selects[1].value;
 
-    if (!recipient || !occasion || !style || !story) {
+    if (!recipient || !email || !occasion || !style || !story) {
       alert("Veuillez remplir tous les champs.");
       return;
     }
 
-    var code = getCode();
-    if (!code) return;
-
     var button = form.querySelector('button[type="submit"]');
     var originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = "Création en cours...";
+    var redirecting = false;
 
+    button.disabled = true;
+    button.textContent = "Ouverture du paiement...";
+    tracking++;
     resetResult();
-    setStatus("Écriture des paroles… (environ 30 secondes)", false);
+    setStatus("Ouverture de la page de paiement…", false);
     resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
-      var startResponse = await fetch('/api/start-song', {
+      var response = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-access-code': code },
-        body: JSON.stringify({ recipient: recipient, occasion: occasion, story: story, style: style })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient: recipient, email: email, occasion: occasion, style: style, story: story })
       });
-      var started = await readJson(startResponse);
+      var data = await readJson(response);
 
-      if (startResponse.status === 401) {
-        clearCode();
-        setStatus("Code d'accès invalide. Réessayez.", true);
-        return;
-      }
-      if (!startResponse.ok || !started.taskId) {
-        setStatus(started.error || "Impossible de lancer la création. Réessayez.", true);
+      if (!response.ok || !data.authorizationUrl || !data.order) {
+        setStatus(data.error || "Impossible d'ouvrir le paiement. Réessayez.", true);
         return;
       }
 
-      titleEl.textContent = started.title || "Votre chanson";
-      titleEl.hidden = false;
-      lyricsEl.textContent = started.lyrics || "";
-      lyricsEl.hidden = !started.lyrics;
-      setStatus("Composition de la musique… (1 à 3 minutes)", false);
-
-      var startedAt = Date.now();
-
-      while (Date.now() - startedAt < MAX_WAIT_MS) {
-        await wait(POLL_EVERY_MS);
-
-        var statusResponse = await fetch('/api/song-status?id=' + encodeURIComponent(started.taskId), {
-          headers: { 'x-access-code': code }
-        });
-        var state = await readJson(statusResponse);
-
-        if (!statusResponse.ok) {
-          setStatus(state.error || "Erreur de suivi. Réessayez.", true);
-          return;
-        }
-        if (state.status === 'failed') {
-          setStatus("La création a échoué. Réessayez.", true);
-          return;
-        }
-        if (state.status === 'ready') {
-          playerEl.src = state.audioUrl;
-          playerEl.hidden = false;
-          downloadEl.href = state.audioUrl;
-          downloadEl.hidden = false;
-          setStatus("Votre chanson est prête ! 🎉", false);
-          return;
-        }
-      }
-
-      setStatus("Cela prend trop de temps. Réessayez dans quelques minutes.", true);
+      store(data.order);
+      redirecting = true;
+      window.location.href = data.authorizationUrl;
     } catch (error) {
       console.error(error);
       setStatus("Problème de connexion. Réessayez.", true);
     } finally {
-      button.disabled = false;
-      button.textContent = originalText;
+      if (!redirecting) {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
     }
   });
+
+  // Au chargement : retour de paiement (?order=...) ou commande en cours gardée dans le navigateur.
+  var fromUrl = /[?&]order=(EM[a-f0-9]{32})/.exec(window.location.search);
+  var ref = fromUrl ? fromUrl[1] : stored();
+  if (ref && REF_RE.test(ref)) {
+    store(ref);
+    track(ref);
+  }
 })();
 </script>
-<!-- Section d'achat Easy Music -->
-<div id="easymusic-pricing" style="font-family: Arial, sans-serif; background-color: #111827; color: #ffffff; padding: 40px 20px; text-align: center; border-radius: 12px; margin: 20px auto; max-width: 800px;">
-    <h2 style="font-size: 28px; margin-bottom: 10px;">Achetez vos crédits Easy Music</h2>
-    <p style="color: #9ca3af; margin-bottom: 30px;">Générez vos chansons par IA instantanément en payant par Mobile Money.</p>
-    
-    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-        
-        <!-- Pack Starter -->
-        <div style="background-color: #1f2937; border: 1px solid #374151; padding: 25px; border-radius: 10px; width: 260px;">
-            <h3 style="margin-top: 0; font-size: 20px;">Pack Starter</h3>
-            <p style="font-size: 24px; font-weight: bold; color: #60a5fa;">1 000 XOF</p>
-            <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">5 Générations de chansons</p>
-            <button onclick="acheterCredits(1000, 5, 'Pack Starter - 5 Crédits')" style="width: 100%; background-color: #4f46e5; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                Payer par Mobile Money
-            </button>
-        </div>
-
-        <!-- Pack Pro -->
-        <div style="background-color: #1f2937; border: 2px solid #4f46e5; padding: 25px; border-radius: 10px; width: 260px; position: relative;">
-            <span style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: #4f46e5; font-size: 10px; padding: 3px 10px; border-radius: 20px; text-transform: uppercase;">Populaire</span>
-            <h3 style="margin-top: 0; font-size: 20px;">Pack Pro</h3>
-            <p style="font-size: 24px; font-weight: bold; color: #60a5fa;">5 000 XOF</p>
-            <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">30 Générations de chansons</p>
-            <button onclick="acheterCredits(5000, 30, 'Pack Pro - 30 Crédits')" style="width: 100%; background-color: #4f46e5; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                Payer par Mobile Money
-            </button>
-        </div>
-
-    </div>
-</div>
-
-<!-- Script JavaScript pour déclencher le paiement -->
-<script>
-async function acheterCredits(amount, creditsToAdd, description) {
-    // ⚠️ Remplacez ceci par l'ID réel de votre utilisateur connecté (récupéré depuis Supabase)
-    const userId = "USER_ID_TEST_SUPABASE"; 
-    const userEmail = "client@easymusic.com";
-
-    if (!userId || userId === "USER_ID_TEST_SUPABASE") {
-        alert("Veuillez vous connecter pour acheter des crédits.");
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: userId,
-                userEmail: userEmail,
-                amount: amount,
-                creditsToAdd: creditsToAdd,
-                description: description
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.payment_url) {
-            // Redirection automatique vers CinetPay (Mobile Money / Carte)
-            window.location.href = data.payment_url;
-        } else {
-            alert("Erreur: " + (data.error || "Impossible d'initialiser le paiement."));
-        }
-    } catch (error) {
-        console.error("Erreur:", error);
-        alert("Une erreur réseau est survenue.");
-    }
-}
-</script>
-
-
 </body>
 </html>
