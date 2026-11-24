@@ -38,6 +38,14 @@ textarea{min-height:100px;resize:vertical}
 .price p{color:#aaa}
 .price .btn{margin-top:18px}
 footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #252735;font-size:13px}
+.result{margin-top:26px;padding-top:22px;border-top:1px solid #343044}
+.result[hidden]{display:none}
+.result-status{text-align:center;font-weight:bold;color:#d3baff}
+.result-status.error{color:#ff8a9b}
+.result h3{margin:18px 0 10px;text-align:center}
+.lyrics{white-space:pre-wrap;background:#0d101b;border:1px solid #38394b;border-radius:12px;padding:16px;color:#e4e1ee;font-size:15px;max-height:340px;overflow:auto}
+.result audio{width:100%;margin-top:18px}
+.result .btn.download{display:block;text-align:center;margin-top:14px}
 @media(max-width:600px){nav a{margin-left:10px;font-size:12px}.hero{padding-top:65px}section{padding:50px 6%}}
 </style>
 </head>
@@ -117,7 +125,14 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 
 <button class="btn" type="submit">Continuer ma création →</button>
 </form>
-<p class="notice">Votre chanson sera générée après la mise en place du système de commande et de paiement.</p>
+<div id="result" class="result" hidden>
+<p id="resultStatus" class="result-status"></p>
+<h3 id="resultTitle" hidden></h3>
+<div id="resultLyrics" class="lyrics" hidden></div>
+<audio id="resultPlayer" controls hidden></audio>
+<a id="resultDownload" class="btn download" target="_blank" rel="noopener" hidden>Télécharger mon MP3</a>
+</div>
+<p class="notice">Mode test : la création est protégée par un code d'accès. Le paiement sera ajouté prochainement.</p>
 </div>
 </section>
 
@@ -151,69 +166,148 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
 <p>Votre histoire, votre musique. ❤️</p>
 </footer>
 <script>
-const form = document.getElementById('songForm');
+(function () {
+  var form = document.getElementById('songForm');
+  if (!form) return;
 
-if (form) {
-  form.addEventListener('submit', async function(e) {
+  var resultBox = document.getElementById('result');
+  var statusEl = document.getElementById('resultStatus');
+  var titleEl = document.getElementById('resultTitle');
+  var lyricsEl = document.getElementById('resultLyrics');
+  var playerEl = document.getElementById('resultPlayer');
+  var downloadEl = document.getElementById('resultDownload');
+
+  var POLL_EVERY_MS = 6000;
+  var MAX_WAIT_MS = 8 * 60 * 1000;
+
+  function getCode() {
+    var code = null;
+    try { code = sessionStorage.getItem('em_access'); } catch (e) {}
+    if (!code) {
+      code = window.prompt("Code d'accès (mode test) :");
+      if (code) {
+        try { sessionStorage.setItem('em_access', code); } catch (e) {}
+      }
+    }
+    return code;
+  }
+
+  function clearCode() {
+    try { sessionStorage.removeItem('em_access'); } catch (e) {}
+  }
+
+  function wait(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function readJson(response) {
+    return response.json().catch(function () { return {}; });
+  }
+
+  function setStatus(text, isError) {
+    statusEl.textContent = text;
+    statusEl.className = 'result-status' + (isError ? ' error' : '');
+  }
+
+  function resetResult() {
+    resultBox.hidden = false;
+    titleEl.hidden = true;
+    lyricsEl.hidden = true;
+    playerEl.hidden = true;
+    downloadEl.hidden = true;
+    playerEl.removeAttribute('src');
+  }
+
+  form.addEventListener('submit', async function (e) {
     e.preventDefault();
 
-    const inputs = form.querySelectorAll('input');
-    const selects = form.querySelectorAll('select');
-    const story = form.querySelector('textarea').value.trim();
+    var inputs = form.querySelectorAll('input');
+    var selects = form.querySelectorAll('select');
+    var story = form.querySelector('textarea').value.trim();
 
-    const recipient = inputs[0].value.trim();
-    const occasion = selects[0].value;
-    const style = selects[1].value;
+    var recipient = inputs[0].value.trim();
+    var occasion = selects[0].value;
+    var style = selects[1].value;
 
     if (!recipient || !occasion || !style || !story) {
       alert("Veuillez remplir tous les champs.");
       return;
     }
 
-    const button = form.querySelector('button[type="submit"]');
-    const originalText = button.textContent;
+    var code = getCode();
+    if (!code) return;
 
+    var button = form.querySelector('button[type="submit"]');
+    var originalText = button.textContent;
     button.disabled = true;
-    button.textContent = "Préparation de votre chanson...";
+    button.textContent = "Création en cours...";
+
+    resetResult();
+    setStatus("Écriture des paroles… (environ 30 secondes)", false);
+    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
-      const response = await fetch('/api/generate', {
+      var startResponse = await fetch('/api/start-song', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          recipient,
-          occasion,
-          story,
-          style
-        })
+        headers: { 'Content-Type': 'application/json', 'x-access-code': code },
+        body: JSON.stringify({ recipient: recipient, occasion: occasion, story: story, style: style })
       });
+      var started = await readJson(startResponse);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erreur lors de la génération.");
+      if (startResponse.status === 401) {
+        clearCode();
+        setStatus("Code d'accès invalide. Réessayez.", true);
+        return;
+      }
+      if (!startResponse.ok || !started.taskId) {
+        setStatus(started.error || "Impossible de lancer la création. Réessayez.", true);
+        return;
       }
 
-      alert(
-        "Votre demande a été envoyée avec succès !\n\n" +
-        "Titre : " + (data.title || "Votre chanson") +
-        "\n\nVotre chanson est en cours de préparation."
-      );
+      titleEl.textContent = started.title || "Votre chanson";
+      titleEl.hidden = false;
+      lyricsEl.textContent = started.lyrics || "";
+      lyricsEl.hidden = !started.lyrics;
+      setStatus("Composition de la musique… (1 à 3 minutes)", false);
 
-      console.log("Réponse API EasyMusic :", data);
+      var startedAt = Date.now();
 
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        await wait(POLL_EVERY_MS);
+
+        var statusResponse = await fetch('/api/song-status?id=' + encodeURIComponent(started.taskId), {
+          headers: { 'x-access-code': code }
+        });
+        var state = await readJson(statusResponse);
+
+        if (!statusResponse.ok) {
+          setStatus(state.error || "Erreur de suivi. Réessayez.", true);
+          return;
+        }
+        if (state.status === 'failed') {
+          setStatus("La création a échoué. Réessayez.", true);
+          return;
+        }
+        if (state.status === 'ready') {
+          playerEl.src = state.audioUrl;
+          playerEl.hidden = false;
+          downloadEl.href = state.audioUrl;
+          downloadEl.hidden = false;
+          setStatus("Votre chanson est prête ! 🎉", false);
+          return;
+        }
+      }
+
+      setStatus("Cela prend trop de temps. Réessayez dans quelques minutes.", true);
     } catch (error) {
-      alert("Erreur : " + error.message);
       console.error(error);
-
+      setStatus("Problème de connexion. Réessayez.", true);
     } finally {
       button.disabled = false;
       button.textContent = originalText;
     }
   });
-}
+})();
 </script>
 <!-- Section d'achat Easy Music -->
 <div id="easymusic-pricing" style="font-family: Arial, sans-serif; background-color: #111827; color: #ffffff; padding: 40px 20px; text-align: center; border-radius: 12px; margin: 20px auto; max-width: 800px;">
