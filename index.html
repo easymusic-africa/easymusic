@@ -367,7 +367,7 @@ footer{text-align:center;padding:35px 15px;color:#888;border-top:1px solid #2527
         lyricsEl.hidden = false;
         playerEl.src = state.audioUrl;
         playerEl.hidden = false;
-        downloadEl.href = state.audioUrl;
+        downloadEl.href = state.audioUrl + (state.audioUrl.indexOf('?') === -1 ? '?' : '&') + 'download=ma-chanson-easymusic.mp3';
         downloadEl.hidden = false;
         setStatus('Votre chanson est prête ! 🎉', false);
         unstore();
